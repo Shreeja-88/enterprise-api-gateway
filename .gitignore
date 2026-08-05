@@ -1,0 +1,36 @@
+# Maven Target Directory (Compiled class files & JARs)
+target/
+*.jar
+*.war
+*.ear
+*.class
+
+# IDE & Editor Settings
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Eclipse
+.settings/
+.classpath
+.project
+bin/
+
+# VS Code
+.vscode/
+
+# Embedded H2 Database Storage (if created on disk)
+*.db
+*.mv.db
+*.trace.db
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+*.dist/

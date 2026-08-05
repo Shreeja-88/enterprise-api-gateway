@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise API Gateway Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js for real-time telemetry chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Inter Font -->
+    <link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="bg-[#0F172A] text-slate-100 min-h-screen p-6 font-sans antialiased">
+
+    <div class="max-w-7xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-5 shadow-lg flex justify-between items-center">
+            <div>
+                <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+                    <span>Enterprise API Gateway Dashboard</span>
+                    <span class="text-xs bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-medium px-2 py-0.5 rounded-full">v1.1.0</span>
+                </h1>
+                <p class="text-xs text-slate-400 mt-1">Rate Limiting • Async Processing • Traffic Management • Telemetry</p>
+            </div>
+            <div class="flex items-center gap-4 text-xs">
+                <div class="text-right hidden sm:block">
+                    <span class="block font-medium text-slate-300">Environment: <span class="text-emerald-400">Local Development</span></span>
+                    <span class="block text-slate-400">Target Port: <span class="font-mono text-slate-300">8081</span></span>
+                </div>
+                <div class="flex items-center gap-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-3 py-1.5 rounded-lg font-medium">
+                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    LIVE
+                </div>
+            </div>
+        </header>
+
+        <!-- KPI Metrics Cards -->
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-sm">
+                <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">Total Requests</span>
+                <div id="statTotal" class="text-2xl font-bold text-white mt-1 font-mono">0</div>
+            </div>
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-sm">
+                <span class="text-xs font-medium text-emerald-400 uppercase tracking-wider">Accepted (202)</span>
+                <div id="statAccepted" class="text-2xl font-bold text-emerald-400 mt-1 font-mono">0</div>
+            </div>
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-sm">
+                <span class="text-xs font-medium text-amber-400 uppercase tracking-wider">Rate Limited (429)</span>
+                <div id="statLimited" class="text-2xl font-bold text-amber-400 mt-1 font-mono">0</div>
+            </div>
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-sm">
+                <span class="text-xs font-medium text-rose-400 uppercase tracking-wider">Queue Rejections (503)</span>
+                <div id="statRejected" class="text-2xl font-bold text-rose-400 mt-1 font-mono">0</div>
+            </div>
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-sm col-span-2 md:col-span-1">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-medium text-indigo-400 uppercase tracking-wider">Latency Profile</span>
+                    <span class="text-[10px] text-slate-400 font-mono">P95</span>
+                </div>
+                <div class="flex items-baseline gap-2 mt-1">
+                    <div id="statLatencyAvg" class="text-2xl font-bold text-indigo-400 font-mono">0.0 ms</div>
+                    <span id="statLatencyP95" class="text-xs text-slate-400 font-mono">P95: 0 ms</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Real-Time Traffic Sparkline Chart -->
+        <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 shadow-lg">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-xs font-semibold text-slate-300">Real-Time Traffic Rate (Requests/sec)</span>
+                <span class="text-[10px] font-mono text-slate-400">Live Window: 30s</span>
+            </div>
+            <div class="h-20 w-full">
+                <canvas id="trafficChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Main Workspace Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Left Panel: Traffic Generator -->
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
+                <div class="space-y-4">
+                    <div class="border-b border-slate-700/80 pb-3">
+                        <h2 class="text-base font-semibold text-white">Traffic Generator</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">Generate load to test rate limiting, queue capacity, and async workers.</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Tenant</label>
+                        <select id="tenantKey" class="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono">
+                            <option value="tenant_alpha">Alpha Production (Capacity: 50)</option>
+                            <option value="tenant_beta">Beta Production (Capacity: 50)</option>
+                            <option value="tenant_gamma">Gamma Testing (Custom)</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Notification Channel</label>
+                            <select id="channel" class="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500">
+                                <option value="SMS">SMS</option>
+                                <option value="EMAIL">EMAIL</option>
+                                <option value="PUSH">PUSH</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-300 mb-1.5">Recipient</label>
+                            <input type="text" id="recipient" value="+1234567890" class="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500 font-mono" placeholder="Recipient ID">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-300 mb-1.5">Notification Payload</label>
+                        <textarea id="message" rows="2" class="w-full bg-[#0F172A] border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500" placeholder="Enter notification message...">Critical Security Alert: Suspicious login attempt detected.</textarea>
+                    </div>
+                </div>
+
+                <!-- Action Controls -->
+                <div class="space-y-2 pt-2 border-t border-slate-700/80">
+                    <button onclick="sendSingleRequest()" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow-sm">
+                        Dispatch Request
+                    </button>
+                    <button onclick="sendBurstRequests(8)" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow-sm">
+                        Burst Test (8 Requests)
+                    </button>
+                    <button onclick="sendBurstRequests(1000)" class="w-full bg-rose-600 hover:bg-rose-500 text-white font-medium py-2 px-4 rounded-lg text-sm transition shadow-sm">
+                        Load Test (1,000 Requests)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Panel: Live Request Stream -->
+            <div class="lg:col-span-2 bg-[#1E293B] border border-slate-700/60 rounded-xl p-5 shadow-lg space-y-4 flex flex-col justify-between">
+                <div>
+                    <div class="flex justify-between items-center border-b border-slate-700/80 pb-3">
+                        <div>
+                            <h2 class="text-base font-semibold text-white">Live Request Stream</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">Real-time request processing and gateway telemetry.</p>
+                        </div>
+                        <button onclick="clearLogs()" class="text-xs text-slate-400 hover:text-slate-200 bg-slate-800 border border-slate-700 px-2.5 py-1 rounded-md transition">
+                            Clear Table
+                        </button>
+                    </div>
+
+                    <!-- Stream Table -->
+                    <div class="overflow-x-auto h-[340px] overflow-y-auto mt-3">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-[#0F172A] sticky top-0 text-slate-400 uppercase tracking-wider text-[10px]">
+                                <tr>
+                                    <th class="p-2.5">Timestamp</th>
+                                    <th class="p-2.5">Method</th>
+                                    <th class="p-2.5">Channel</th>
+                                    <th class="p-2.5">Tenant</th>
+                                    <th class="p-2.5">Response</th>
+                                    <th class="p-2.5">Latency</th>
+                                    <th class="p-2.5">Tracking ID</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logTableBody" class="divide-y divide-slate-700/50 font-mono">
+                                <!-- Stream items appended dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- System Architecture Telemetry Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            <!-- Queue Usage Card -->
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-semibold text-slate-200">Queue Usage</span>
+                    <span id="queueBadge" class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">Healthy</span>
+                </div>
+                <div class="flex justify-between text-xs text-slate-400 mt-1 font-mono">
+                    <span>Depth</span>
+                    <span id="queueDepthText" class="text-slate-200">0 Tasks</span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-[#0F172A] rounded-full h-2 overflow-hidden border border-slate-700">
+                    <div id="queueProgressBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between text-[11px] text-slate-400 pt-0.5 font-mono">
+                    <span>Utilization</span>
+                    <span id="queueUtilText">0.0%</span>
+                </div>
+            </div>
+
+            <!-- Rate Limiter Card -->
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-semibold text-slate-200">Token Bucket</span>
+                    <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">Active</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Capacity</span>
+                        <span class="font-mono font-medium text-slate-200">50 Tokens</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Refill Rate</span>
+                        <span class="font-mono font-medium text-slate-200">0.2 Tokens/sec</span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 pt-1">Thread-Safe Atomic Sync</div>
+            </div>
+
+            <!-- Worker Pool Card -->
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-semibold text-slate-200">Worker Pool</span>
+                    <span class="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded font-mono">Running</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Running Threads</span>
+                        <span class="font-mono font-medium text-slate-200">4 Worker Threads</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Queue Consumer</span>
+                        <span class="font-mono font-medium text-slate-200">Producer-Consumer</span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 pt-1">ExecutorService Fixed Pool</div>
+            </div>
+
+            <!-- Database Card -->
+            <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-4 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-semibold text-slate-200">Persistence Layer</span>
+                    <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">Pooled</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Database / Pool</span>
+                        <span class="font-mono font-medium text-slate-200">H2 / HikariCP (5)</span>
+                    </div>
+                    <div>
+                        <span class="text-slate-400 block text-[11px]">Transactions</span>
+                        <span class="font-mono font-medium text-slate-200">Commit / Rollback</span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-slate-400 pt-1">JDBC Connection Pool</div>
+            </div>
+
+        </div>
+
+        <!-- Interactive Architecture Flow -->
+        <div class="bg-[#1E293B] border border-slate-700/60 rounded-xl p-5 shadow-lg space-y-3">
+            <h2 class="text-xs font-semibold text-slate-300 uppercase tracking-wider">System Architectural Execution Flow</h2>
+            <div class="grid grid-cols-2 md:grid-cols-7 gap-2 text-center text-xs font-mono py-2">
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-indigo-400 font-bold">1. Client</span>
+                    <span class="text-[10px] text-slate-500">HTTP POST</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-slate-200 font-bold">2. Gateway</span>
+                    <span class="text-[10px] text-slate-500">RateLimiterFilter</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-amber-400 font-bold">3. Token Bucket</span>
+                    <span class="text-[10px] text-slate-500">Atomic Check</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-emerald-400 font-bold">4. Servlet</span>
+                    <span class="text-[10px] text-slate-500">202 Accepted</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-indigo-400 font-bold">5. Queue</span>
+                    <span class="text-[10px] text-slate-500">ArrayBlocking</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg">
+                    <span class="block text-purple-400 font-bold">6. Worker Pool</span>
+                    <span class="text-[10px] text-slate-500">4 Threads</span>
+                </div>
+                <div class="bg-[#0F172A] border border-slate-700 p-2.5 rounded-lg col-span-2 md:col-span-1">
+                    <span class="block text-emerald-400 font-bold">7. Database</span>
+                    <span class="text-[10px] text-slate-500">HikariCP Pool</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="text-center text-xs text-slate-500 pt-2 border-t border-slate-800">
+            Java • Tomcat • Jakarta Servlet • ExecutorService • HikariCP • JDBC • H2 • Token Bucket Algorithm
+        </footer>
+
+    </div>
+
+    <!-- Script Layer -->
+    <script>
+        const API_URL = 'http://localhost:8081/api/v1/notifications';
+
+        // Telemetry state
+        let metrics = {
+            total: 0,
+            accepted: 0,
+            limited: 0,
+            rejected: 0,
+            latencies: [],
+            simulatedQueueSize: 0,
+            recentRps: 0
+        };
+
+        // Initialize Chart.js Sparkline
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        const trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(30).fill(''),
+                datasets: [{
+                    data: Array(30).fill(0),
+                    borderColor: '#6366F1',
+                    borderWidth: 2,
+                    fill: true,
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { display: false },
+                    y: { display: false, min: 0 }
+                }
+            }
+        });
+
+        // 1-second interval to update RPS chart
+        setInterval(() => {
+            trafficChart.data.datasets[0].data.shift();
+            trafficChart.data.datasets[0].data.push(metrics.recentRps);
+            trafficChart.update();
+            metrics.recentRps = 0; // reset rps window
+        }, 1000);
+
+        async function dispatchApiCall() {
+            const tenantKey = document.getElementById('tenantKey').value;
+            const channel = document.getElementById('channel').value;
+            const recipient = document.getElementById('recipient').value;
+            const message = document.getElementById('message').value;
+
+            const startTime = performance.now();
+            const timeString = new Date().toLocaleTimeString();
+
+            try {
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Tenant-API-Key': tenantKey
+                    },
+                    body: JSON.stringify({ channel, recipient, message })
+                });
+
+                const latency = Math.round(performance.now() - startTime);
+                const data = await response.json();
+
+                updateMetrics(response.status, latency);
+                appendLog(timeString, 'POST', channel, tenantKey, response.status, latency, data);
+            } catch (error) {
+                const latency = Math.round(performance.now() - startTime);
+                updateMetrics(500, latency);
+                appendLog(timeString, 'POST', channel, tenantKey, 500, latency, { error: 'Connection Refused' });
+            }
+        }
+
+        function sendSingleRequest() {
+            dispatchApiCall();
+        }
+
+        function sendBurstRequests(count) {
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => dispatchApiCall(), i * 4);
+            }
+        }
+
+        function updateMetrics(status, latency) {
+            metrics.total++;
+            metrics.recentRps++;
+            metrics.latencies.push(latency);
+
+            if (status === 202) {
+                metrics.accepted++;
+                if (metrics.simulatedQueueSize < 1000) metrics.simulatedQueueSize++;
+            } else if (status === 429) {
+                metrics.limited++;
+            } else if (status === 503) {
+                metrics.rejected++;
+            }
+
+            // Update KPI Cards
+            document.getElementById('statTotal').innerText = metrics.total.toLocaleString();
+            document.getElementById('statAccepted').innerText = metrics.accepted.toLocaleString();
+            document.getElementById('statLimited').innerText = metrics.limited.toLocaleString();
+            document.getElementById('statRejected').innerText = metrics.rejected.toLocaleString();
+            
+            // Latency calculations (Avg & P95)
+            const sum = metrics.latencies.reduce((a, b) => a + b, 0);
+            const avg = (sum / metrics.latencies.length).toFixed(1);
+            
+            const sorted = [...metrics.latencies].sort((a, b) => a - b);
+            const p95Index = Math.floor(sorted.length * 0.95);
+            const p95 = sorted[p95Index] || avg;
+
+            document.getElementById('statLatencyAvg').innerText = `${avg} ms`;
+            document.getElementById('statLatencyP95').innerText = `P95: ${p95} ms`;
+
+            // Update Queue Telemetry
+            updateQueueCard();
+        }
+
+        function updateQueueCard() {
+            const utilPercent = ((metrics.simulatedQueueSize / 1000) * 100).toFixed(1);
+            document.getElementById('queueProgressBar').style.width = `${utilPercent}%`;
+            document.getElementById('queueDepthText').innerText = `${metrics.simulatedQueueSize} Tasks`;
+            document.getElementById('queueUtilText').innerText = `${utilPercent}%`;
+
+            const badge = document.getElementById('queueBadge');
+            if (utilPercent > 80) {
+                badge.className = 'text-[10px] bg-rose-500/10 text-rose-400 border border-rose-500/20 px-1.5 py-0.5 rounded font-mono';
+                badge.innerText = 'Critical';
+            } else if (utilPercent > 50) {
+                badge.className = 'text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded font-mono';
+                badge.innerText = 'High Load';
+            } else {
+                badge.className = 'text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono';
+                badge.innerText = 'Healthy';
+            }
+        }
+
+        function appendLog(time, method, channel, tenant, status, latency, responseData) {
+            const tbody = document.getElementById('logTableBody');
+            const row = document.createElement('tr');
+            row.className = 'hover:bg-slate-800/50 transition border-b border-slate-800/60';
+
+            let statusBadge = '';
+            if (status === 202) {
+                statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
+                                 🟢 202 Accepted
+                               </span>`;
+            } else if (status === 429) {
+                statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-semibold border border-amber-500/20 text-[11px]">
+                                 🟠 429 Limited
+                               </span>`;
+            } else if (status === 401) {
+                statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-semibold border border-slate-600 text-[11px]">
+                                 ⚫ 401 Unauthorized
+                               </span>`;
+            } else if (status === 503) {
+                statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 font-semibold border border-rose-500/20 text-[11px]">
+                                 🔴 503 Busy
+                               </span>`;
+            } else {
+                statusBadge = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-slate-700 text-slate-300 font-semibold text-[11px]">${status}</span>`;
+            }
+
+            const trackingText = responseData.trackingId 
+                ? `<span class="text-indigo-400 font-mono text-[11px]">${responseData.trackingId.substring(0, 18)}...</span>` 
+                : `<span class="text-slate-500 text-[11px]">${responseData.error || 'N/A'}</span>`;
+
+            row.innerHTML = `
+                <td class="p-2.5 text-slate-400">${time}</td>
+                <td class="p-2.5 font-bold text-indigo-400">${method}</td>
+                <td class="p-2.5 text-slate-300">${channel}</td>
+                <td class="p-2.5 font-medium text-slate-200">${tenant}</td>
+                <td class="p-2.5">${statusBadge}</td>
+                <td class="p-2.5 text-slate-400">${latency} ms</td>
+                <td class="p-2.5">${trackingText}</td>
+            `;
+
+            tbody.prepend(row);
+
+            if (tbody.children.length > 100) {
+                tbody.removeChild(tbody.lastChild);
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('logTableBody').innerHTML = '';
+        }
+
+        // Simulate queue drain by worker pool
+        setInterval(() => {
+            if (metrics.simulatedQueueSize > 0) {
+                metrics.simulatedQueueSize = Math.max(0, metrics.simulatedQueueSize - 4);
+                updateQueueCard();
+            }
+        }, 300);
+    </script>
+</body>
+</html>
